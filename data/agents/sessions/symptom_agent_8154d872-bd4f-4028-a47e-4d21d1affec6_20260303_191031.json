@@ -1,0 +1,21 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "8154d872-bd4f-4028-a47e-4d21d1affec6",
+  "summary": {
+    "symptoms": {
+      "description": "running nose none",
+      "duration": "4",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose none"
+      ],
+      "needs_more_info": false,
+      "error": "RetryError[<Future at 0x1cf014a65d0 state=finished raised APIConnectionError>]",
+      "structured_summary": "running nose none"
+    }
+  },
+  "timestamp": "2026-03-03T19:10:31.132795"
+}

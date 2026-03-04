@@ -1,0 +1,21 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "adbaaba8-2722-4440-ad22-eb1ab3547fc2",
+  "summary": {
+    "symptoms": {
+      "description": "headeche none",
+      "duration": "5",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "headeche none"
+      ],
+      "needs_more_info": false,
+      "error": "RetryError[<Future at 0x1f8c474b250 state=finished raised APIConnectionError>]",
+      "structured_summary": "headeche none"
+    }
+  },
+  "timestamp": "2026-03-03T21:27:51.635772"
+}

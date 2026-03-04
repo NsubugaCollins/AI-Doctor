@@ -1,0 +1,25 @@
+django>=4.2
+djangorestframework
+django-allauth
+django-cors-headers
+django-channels
+channels-redis
+python-dotenv
+psycopg2-binary
+redis
+django-redis
+gunicorn
+whitenoise
+widget-tweaks
+
+# AI & RAG
+openai
+groq
+tenacity
+sentence-transformers
+faiss-cpu
+numpy
+PyPDF2
+
+# Async
+asgiref

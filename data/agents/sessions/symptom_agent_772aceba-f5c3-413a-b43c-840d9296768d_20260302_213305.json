@@ -1,0 +1,21 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "772aceba-f5c3-413a-b43c-840d9296768d",
+  "summary": {
+    "symptoms": {
+      "description": "running nose hedache",
+      "duration": "4",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose hedache"
+      ],
+      "needs_more_info": false,
+      "error": "RetryError[<Future at 0x1879c683110 state=finished raised RateLimitError>]",
+      "structured_summary": "running nose hedache"
+    }
+  },
+  "timestamp": "2026-03-02T21:33:05.503435"
+}

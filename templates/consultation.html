@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+
+{% block title %}New Consultation - MediAI{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4">
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="px-6 py-4 gradient-bg">
+            <h1 class="text-2xl font-bold text-white">New Consultation</h1>
+            <p class="text-blue-100 mt-1">Describe your symptoms to get started</p>
+        </div>
+        
+        <div class="p-6" x-data="consultationForm()" x-cloak>
+            <!-- Input Method Toggle -->
+            <div class="flex space-x-4 mb-6">
+                <button @click="inputMode = 'text'" 
+                        class="flex-1 py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2"
+                        :class="inputMode === 'text' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                    <i class="fas fa-keyboard"></i>
+                    <span>Text Input</span>
+                </button>
+                <button @click="inputMode = 'voice'" 
+                        class="flex-1 py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2"
+                        :class="inputMode === 'voice' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
+                    <i class="fas fa-microphone"></i>
+                    <span>Voice Input</span>
+                </button>
+            </div>
+            
+            <!-- Text Input Form -->
+            <form x-show="inputMode === 'text'" @submit.prevent="submitTextSymptoms" method="post">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Describe your symptoms
+                        </label>
+                        <textarea x-model="form.description" 
+                                  rows="5"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Example: I have a severe headache that started yesterday, and I feel nauseous when exposed to light..."
+                                  required></textarea>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Duration
+                            </label>
+                            <input type="text" x-model="form.duration" 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                   placeholder="e.g., 2 days">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Severity (1-10)
+                            </label>
+                            <input type="range" x-model.number="form.severity" min="1" max="10" 
+                                   class="w-full">
+                            <div class="text-center mt-1 text-sm text-gray-600" x-text="form.severity + '/10'"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Additional notes (optional)
+                        </label>
+                        <textarea x-model="form.notes" 
+                                  rows="3"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Any other information you'd like to share..."></textarea>
+                    </div>
+                    
+                    <button type="submit" 
+                            :disabled="!form.description"
+                            class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium">
+                        <i class="fas fa-paper-plane mr-2"></i>
+                        Submit Symptoms
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Voice Input -->
+            <div x-show="inputMode === 'voice'" x-transition class="text-center py-8">
+                <div class="relative">
+                    <button @click="toggleRecording" 
+                            class="w-24 h-24 rounded-full mx-auto transition-all"
+                            :class="isRecording ? 'bg-red-500 pulse-animation' : 'bg-blue-600 hover:bg-blue-700'">
+                        <i class="fas fa-microphone text-white text-3xl"></i>
+                    </button>
+                </div>
+                
+                <p class="mt-4 text-gray-600" x-text="recordingStatus"></p>
+                
+                <template x-if="transcribedText">
+                    <div class="mt-6 p-4 bg-gray-50 rounded-lg text-left">
+                        <h3 class="font-medium mb-2">Transcribed Text:</h3>
+                        <p class="text-gray-700" x-text="transcribedText"></p>
+                        
+                        <div class="mt-4 grid grid-cols-2 gap-4">
+                            <input type="text" x-model="voiceDuration" 
+                                   class="px-4 py-2 border rounded-lg"
+                                   placeholder="Duration (e.g., 2 days)">
+                            <input type="number" x-model.number="voiceSeverity" min="1" max="10"
+                                   class="px-4 py-2 border rounded-lg"
+                                   placeholder="Severity (1-10)">
+                        </div>
+                        
+                        <button @click="submitVoiceSymptoms" 
+                                class="mt-4 w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700">
+                            <i class="fas fa-check mr-2"></i>
+                            Confirm and Submit
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tips -->
+    <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-lightbulb text-blue-500"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Tips for better diagnosis</h3>
+                <div class="mt-2 text-sm text-blue-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Be specific about when symptoms started</li>
+                        <li>Mention if anything makes symptoms better or worse</li>
+                        <li>Include any medications you're currently taking</li>
+                        <li>Mention any relevant medical history</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function consultationForm() {
+    return {
+        inputMode: 'text',
+        form: { description: '', duration: '', severity: 5, notes: '' },
+        isRecording: false,
+        recordingStatus: 'Click the microphone to start recording',
+        transcribedText: '',
+        voiceDuration: '',
+        voiceSeverity: 5,
+        recognition: null,
+
+        init() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = false;
+                this.recognition.interimResults = false;
+                this.recognition.lang = 'en-US';
+
+                this.recognition.onresult = (event) => {
+                    this.transcribedText = event.results[0][0].transcript;
+                    this.stopRecording();
+                };
+                this.recognition.onerror = (event) => {
+                    this.recordingStatus = 'Error: ' + event.error;
+                    this.isRecording = false;
+                    showToast('Speech recognition error: ' + event.error, 'error');
+                };
+                this.recognition.onend = () => {
+                    this.isRecording = false;
+                    this.recordingStatus = 'Recording stopped';
+                };
+            } else console.warn('Speech recognition not supported');
+        },
+
+        toggleRecording() {
+            if (!this.recognition) return showToast('Speech recognition not supported', 'error');
+            this.isRecording ? this.stopRecording() : this.startRecording();
+        },
+        startRecording() {
+            this.isRecording = true;
+            this.recordingStatus = 'Listening... Speak now';
+            try { this.recognition.start(); } 
+            catch (error) { console.error(error); this.isRecording = false; this.recordingStatus = 'Error starting recording'; }
+        },
+        stopRecording() { this.isRecording = false; this.recognition.stop(); this.recordingStatus = 'Recording stopped'; },
+
+        async submitTextSymptoms() {
+            if (!this.form.description) return showToast('Please describe your symptoms', 'warning');
+            showLoading('Processing your symptoms...');
+            try {
+                const formData = new FormData();
+                formData.append('description', this.form.description + (this.form.notes ? ' ' + this.form.notes : ''));
+                if (this.form.duration) formData.append('duration', this.form.duration);
+                formData.append('severity', this.form.severity);
+                formData.append('input_type', 'text');
+
+                const startResponse = await fetch('/api/consultations/start/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify({ name: '{{ user.get_full_name|default:user.username }}', age: 30, gender: 'unknown', medical_history: '' })
+                });
+
+                if (!startResponse.ok) throw new Error((await startResponse.json()).error || 'Failed to start consultation');
+                const consultationId = (await startResponse.json()).consultation_id;
+
+                const symptomResponse = await fetch(`/api/consultation/${consultationId}/add-symptoms/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData });
+
+                // Redirect to consultation detail page to watch progress
+                showToast('Consultation started! AI agents are now processing...', 'success');
+                setTimeout(() => {
+                    window.location.href = `/api/consultation/${consultationId}/`;
+                }, 1000);
+            } catch (error) { showToast(error.message || 'Error submitting symptoms', 'error'); console.error(error); }
+            finally { hideLoading(); }
+        },
+
+        async submitVoiceSymptoms() {
+            if (!this.transcribedText) return showToast('Please record your symptoms first', 'warning');
+            showLoading('Processing voice input...');
+            try {
+                const startResponse = await fetch('/api/consultations/start/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify({ name: '{{ user.get_full_name|default:user.username }}', age: 30, gender: 'unknown', medical_history: '' })
+                });
+                if (!startResponse.ok) throw new Error((await startResponse.json()).error || 'Failed to start consultation');
+                const consultationId = (await startResponse.json()).consultation_id;
+
+                const formData = new FormData();
+                formData.append('description', this.transcribedText);
+                if (this.voiceDuration) formData.append('duration', this.voiceDuration);
+                formData.append('severity', this.voiceSeverity);
+                formData.append('input_type', 'voice');
+
+                const symptomResponse = await fetch(`/api/consultation/${consultationId}/add-symptoms/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData });
+                if (symptomResponse.redirected) window.location.href = symptomResponse.url;
+                else window.location.href = `/api/consultation/${consultationId}/`;
+            } catch (error) { showToast(error.message || 'Error processing voice', 'error'); console.error(error); }
+            finally { hideLoading(); }
+        }
+    };
+}
+</script>
+{% endblock %}

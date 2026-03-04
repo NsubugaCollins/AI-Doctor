@@ -1,0 +1,21 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "81920bbc-5639-41ed-9266-ffa8763595ea",
+  "summary": {
+    "symptoms": {
+      "description": "headache none",
+      "duration": "3",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "headache none"
+      ],
+      "needs_more_info": false,
+      "error": "RetryError[<Future at 0x2d14bdbb390 state=finished raised APIConnectionError>]",
+      "structured_summary": "headache none"
+    }
+  },
+  "timestamp": "2026-03-03T22:07:25.966982"
+}

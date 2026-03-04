@@ -1,0 +1,496 @@
+{% extends 'base.html' %}
+
+{% block title %}Consultation Progress - MediAI{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4" x-data="consultationMonitor()">
+    <!-- Header -->
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Consultation Progress</h1>
+            <p class="text-gray-600 mt-1">ID: {{ consultation.id }}</p>
+        </div>
+        <a href="{% url 'dashboard' %}" class="text-blue-600 hover:text-blue-700">
+            <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Real-time Progress Bar -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">AI Processing Status</h2>
+        
+        <!-- Progress Steps -->
+        <div class="relative">
+            <div class="flex justify-between mb-2">
+                <template x-for="(step, index) in steps" :key="index">
+                    <div class="flex flex-col items-center flex-1">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300"
+                             :class="{
+                                 'bg-green-500 text-white': step.completed,
+                                 'bg-blue-500 text-white animate-pulse': step.active,
+                                 'bg-gray-300 text-gray-600': !step.completed && !step.active
+                             }">
+                            <i :class="step.icon" class="text-sm"></i>
+                        </div>
+                        <div class="text-xs mt-2 text-center" :class="{
+                            'text-green-600 font-medium': step.completed,
+                            'text-blue-600 font-medium': step.active,
+                            'text-gray-500': !step.completed && !step.active
+                        }" x-text="step.label"></div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Connection Line -->
+            <div class="absolute top-5 left-0 right-0 h-0.5 bg-gray-300 -z-10" style="margin: 0 5%;">
+                <div class="h-full bg-green-500 transition-all duration-500" :style="`width: ${progress}%`"></div>
+            </div>
+        </div>
+        
+        <!-- Current Activity -->
+        <div class="mt-6 p-4 bg-blue-50 rounded-lg" x-show="currentActivity">
+            <div class="flex items-start space-x-3">
+                <div class="typing-indicator mt-1">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div>
+                    <p class="font-medium text-blue-900" x-text="currentAgent"></p>
+                    <p class="text-sm text-blue-700" x-text="currentActivity"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+        <!-- Main Content Column -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Agent Activity Log -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-robot text-purple-600 mr-2"></i>
+                    AI Agent Activity
+                </h2>
+                
+                <div class="space-y-3 max-h-96 overflow-y-auto">
+                    <template x-for="(log, index) in activityLog" :key="index">
+                        <div class="flex items-start space-x-3 p-3 rounded-lg transition-all"
+                             :class="{
+                                 'bg-green-50 border-l-4 border-green-500': log.type === 'completed',
+                                 'bg-blue-50 border-l-4 border-blue-500': log.type === 'started',
+                                 'bg-yellow-50 border-l-4 border-yellow-500': log.type === 'progress',
+                                 'bg-purple-50 border-l-4 border-purple-500': log.type === 'thinking'
+                             }">
+                            <div>
+                                <i :class="log.icon" class="mt-1"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-900" x-text="log.agent"></p>
+                                <p class="text-sm text-gray-700" x-text="log.message"></p>
+                                <p class="text-xs text-gray-500" x-text="log.timestamp"></p>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <div x-show="activityLog.length === 0" class="text-center py-8 text-gray-500">
+                        <i class="fas fa-hourglass-half text-4xl mb-3 opacity-50"></i>
+                        <p>Waiting for AI agents to start processing...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Symptoms Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-notes-medical text-red-600 mr-2"></i>
+                    Your Symptoms
+                </h2>
+                
+                {% if consultation.symptom_list.all %}
+                <div class="space-y-4">
+                    {% for symptom in consultation.symptom_list.all %}
+                    <div class="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r">
+                        <p class="text-gray-800">{{ symptom.description }}</p>
+                        <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                            {% if symptom.duration %}
+                            <span><i class="fas fa-clock mr-1"></i> {{ symptom.duration }}</span>
+                            {% endif %}
+                            {% if symptom.severity %}
+                            <span><i class="fas fa-thermometer-half mr-1"></i> Severity: {{ symptom.severity }}/10</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Diagnosis Card (shows when available) -->
+            <div class="bg-white rounded-lg shadow-lg p-6" x-show="diagnosis" x-transition>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-stethoscope text-green-600 mr-2"></i>
+                    AI Diagnosis
+                </h2>
+                
+                <div x-show="diagnosis">
+                    <div class="mb-4">
+                        <span class="text-sm font-medium text-gray-600">Primary Suspicion:</span>
+                        <p class="text-lg text-gray-900 font-medium" x-text="diagnosis?.primary_suspicion"></p>
+                    </div>
+                    
+                    <div x-show="diagnosis?.differential_diagnosis?.length > 0" class="mb-4">
+                        <span class="text-sm font-medium text-gray-600">Differential Diagnosis:</span>
+                        <ul class="mt-2 space-y-2">
+                            <template x-for="item in diagnosis?.differential_diagnosis" :key="item.condition">
+                                <li class="flex items-start space-x-2">
+                                    <i class="fas fa-circle text-xs text-blue-500 mt-1.5"></i>
+                                    <div>
+                                        <span x-text="item.condition" class="font-medium"></span>
+                                        <span x-show="item.probability" class="text-sm text-gray-600">
+                                            (<span x-text="Math.round(item.probability * 100)"></span>%)
+                                        </span>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lab Tests Document (shows when available) -->
+            <div class="bg-white rounded-lg shadow-lg p-6" x-show="labTestsDoc" x-transition>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-flask text-purple-600 mr-2"></i>
+                    Lab Tests Ordered
+                </h2>
+                
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <pre class="text-sm text-gray-800 whitespace-pre-wrap font-mono" x-text="labTestsDoc"></pre>
+                </div>
+                
+                <div x-show="labTests?.length > 0" class="mt-4 space-y-3">
+                    <template x-for="test in labTests" :key="test.test_id">
+                        <div class="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-medium text-gray-900" x-text="test.test_name"></h4>
+                                    <p class="text-sm text-gray-600" x-text="test.rationale"></p>
+                                </div>
+                                <span class="px-3 py-1 text-xs rounded-full"
+                                      :class="{
+                                          'bg-green-100 text-green-800': test.status === 'completed',
+                                          'bg-yellow-100 text-yellow-800': test.status === 'pending',
+                                          'bg-blue-100 text-blue-800': test.status === 'processing'
+                                      }" x-text="test.status"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Lab Results (shows when available) -->
+            <div class="bg-white rounded-lg shadow-lg p-6" x-show="labResults?.length > 0" x-transition>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-vial text-purple-600 mr-2"></i>
+                    Lab Results Received
+                </h2>
+                
+                <div class="space-y-4">
+                    <template x-for="result in labResults" :key="result.test_name">
+                        <div class="border rounded-lg p-4 bg-purple-50">
+                            <h4 class="font-medium text-gray-900 mb-2" x-text="result.test_name"></h4>
+                            <pre class="text-sm text-gray-700 whitespace-pre-wrap" x-text="JSON.stringify(result.results, null, 2)"></pre>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Prescription (shows when available) -->
+            <div class="bg-white rounded-lg shadow-lg p-6" x-show="prescription" x-transition>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-pills text-orange-600 mr-2"></i>
+                    Your Prescription
+                </h2>
+                
+                <div x-show="prescription?.medications?.length > 0" class="space-y-3">
+                    <h4 class="font-medium text-gray-700 mb-2">Medications:</h4>
+                    <template x-for="med in prescription?.medications" :key="med.name">
+                        <div class="border-l-4 border-orange-500 pl-4 py-3 bg-orange-50 rounded-r">
+                            <p class="font-medium text-gray-900" x-text="med.name"></p>
+                            <p class="text-sm text-gray-700" x-text="`${med.dosage} - ${med.frequency} for ${med.duration}`"></p>
+                            <p class="text-sm text-gray-600 mt-1" x-text="med.instructions"></p>
+                        </div>
+                    </template>
+                </div>
+                
+                <div x-show="prescription?.treatment_plan" class="mt-4 p-4 bg-yellow-50 rounded-lg">
+                    <h4 class="font-medium text-gray-700 mb-1">Treatment Plan:</h4>
+                    <p class="text-gray-700" x-text="prescription?.treatment_plan"></p>
+                </div>
+                
+                <div x-show="prescription?.follow_up" class="mt-4 p-4 bg-blue-50 rounded-lg">
+                    <h4 class="font-medium text-gray-700 mb-1">Follow-up:</h4>
+                    <p class="text-gray-700" x-text="prescription?.follow_up"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Connection Status -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-signal text-gray-600 mr-2"></i>
+                    Connection Status
+                </h3>
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full" :class="connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"></div>
+                    <span class="text-sm" :class="connected ? 'text-green-600' : 'text-red-600'" x-text="connected ? 'Connected' : 'Disconnected'"></span>
+                </div>
+            </div>
+
+            <!-- Patient Info -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-user-circle text-gray-600 mr-2"></i>
+                    Patient Information
+                </h3>
+                <div class="space-y-3 text-sm">
+                    <div>
+                        <span class="text-gray-600">Name:</span>
+                        <p class="font-medium text-gray-900">{{ consultation.patient.user.get_full_name|default:consultation.patient.user.username }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="font-semibold text-gray-800 mb-4">Actions</h3>
+                <div class="space-y-2">
+                    <button @click="refreshData" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function consultationMonitor() {
+    return {
+        connected: false,
+        ws: null,
+        consultationId: '{{ consultation.id }}',
+        currentAgent: '',
+        currentActivity: '',
+        progress: 0,
+        activityLog: [],
+        diagnosis: null,
+        labTests: [],
+        labTestsDoc: '',
+        labResults: [],
+        prescription: null,
+        
+        steps: [
+            { label: 'Symptoms', icon: 'fas fa-notes-medical', completed: true, active: false },
+            { label: 'Analysis', icon: 'fas fa-brain', completed: false, active: false },
+            { label: 'Diagnosis', icon: 'fas fa-stethoscope', completed: false, active: false },
+            { label: 'Lab Tests', icon: 'fas fa-flask', completed: false, active: false },
+            { label: 'Results', icon: 'fas fa-vial', completed: false, active: false },
+            { label: 'Prescription', icon: 'fas fa-pills', completed: false, active: false },
+            { label: 'Complete', icon: 'fas fa-check-circle', completed: false, active: false }
+        ],
+        
+        init() {
+            this.connectWebSocket();
+            this.loadInitialData();
+            
+            // Keep-alive ping every 30 seconds
+            setInterval(() => {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 30000);
+        },
+        
+        connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/consultation/${this.consultationId}/`;
+            
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.onopen = () => {
+                this.connected = true;
+                console.log('WebSocket connected');
+                showToast('Connected to live updates', 'success');
+            };
+            
+            this.ws.onclose = () => {
+                this.connected = false;
+                console.log('WebSocket disconnected');
+                // Reconnect after 3 seconds
+                setTimeout(() => this.connectWebSocket(), 3000);
+            };
+            
+            this.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+            
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            };
+        },
+        
+        handleWebSocketMessage(data) {
+            console.log('WebSocket message:', data);
+            
+            switch(data.type) {
+                case 'connection_established':
+                    break;
+                    
+                case 'agent_started':
+                    this.handleAgentStarted(data);
+                    break;
+                    
+                case 'agent_progress':
+                    this.handleAgentProgress(data);
+                    break;
+                    
+                case 'agent_completed':
+                    this.handleAgentCompleted(data);
+                    break;
+                    
+                case 'consultation_update':
+                    this.handleConsultationUpdate(data.data);
+                    break;
+                    
+                case 'state_changed':
+                    this.handleStateChanged(data);
+                    break;
+            }
+        },
+        
+        handleAgentStarted(data) {
+            this.currentAgent = this.formatAgentName(data.agent);
+            this.currentActivity = data.message;
+            
+            this.addLog({
+                type: 'started',
+                agent: this.formatAgentName(data.agent),
+                message: data.message,
+                icon: 'fas fa-play-circle text-blue-500',
+                timestamp: new Date().toLocaleTimeString()
+            });
+            
+            this.updateStepProgress(data.agent, 'active');
+        },
+        
+        handleAgentProgress(data) {
+            this.currentActivity = data.message;
+            
+            this.addLog({
+                type: 'progress',
+                agent: this.formatAgentName(data.agent),
+                message: data.message,
+                icon: 'fas fa-spinner fa-spin text-yellow-500',
+                timestamp: new Date().toLocaleTimeString()
+            });
+        },
+        
+        handleAgentCompleted(data) {
+            this.addLog({
+                type: 'completed',
+                agent: this.formatAgentName(data.agent),
+                message: data.message,
+                icon: 'fas fa-check-circle text-green-500',
+                timestamp: new Date().toLocaleTimeString()
+            });
+            
+            this.updateStepProgress(data.agent, 'completed');
+            
+            // Update data from agent results
+            if (data.data) {
+                if (data.data.diagnosis) this.diagnosis = data.data.diagnosis;
+                if (data.data.lab_tests) this.labTests = data.data.lab_tests;
+                if (data.data.lab_tests_document) this.labTestsDoc = data.data.lab_tests_document;
+                if (data.data.lab_results) this.labResults = data.data.lab_results;
+                if (data.data.prescription) this.prescription = data.data.prescription;
+            }
+        },
+        
+        handleConsultationUpdate(data) {
+            console.log('Consultation update:', data);
+            if (data.diagnosis) this.diagnosis = data.diagnosis;
+            if (data.lab_tests) this.labTests = data.lab_tests;
+            if (data.lab_results) this.labResults = data.lab_results;
+            if (data.prescription) this.prescription = data.prescription;
+        },
+        
+        handleStateChanged(data) {
+            this.addLog({
+                type: 'thinking',
+                agent: 'System',
+                message: `State changed: ${data.old_state} → ${data.new_state}`,
+                icon: 'fas fa-arrow-right text-purple-500',
+                timestamp: new Date().toLocaleTimeString()
+            });
+        },
+        
+        updateStepProgress(agent, status) {
+            const agentStepMap = {
+                'symptom_agent': 1,
+                'diagnosis_agent': 2,
+                'lab_agent': 3
+            };
+            
+            const stepIndex = agentStepMap[agent];
+            if (stepIndex !== undefined) {
+                if (status === 'active') {
+                    this.steps[stepIndex].active = true;
+                    this.progress = (stepIndex / this.steps.length) * 100;
+                } else if (status === 'completed') {
+                    this.steps[stepIndex].completed = true;
+                    this.steps[stepIndex].active = false;
+                    this.progress = ((stepIndex + 1) / this.steps.length) * 100;
+                }
+            }
+        },
+        
+        addLog(log) {
+            this.activityLog.unshift(log);
+            if (this.activityLog.length > 50) {
+                this.activityLog = this.activityLog.slice(0, 50);
+            }
+        },
+        
+        formatAgentName(agent) {
+            return agent.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        },
+        
+        async loadInitialData() {
+            try {
+                const response = await fetch(`/api/consultation/{{ consultation.id }}/status/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.diagnosis) this.diagnosis = data.diagnosis;
+                    if (data.lab_tests) this.labTests = data.lab_tests;
+                    if (data.lab_results) this.labResults = data.lab_results;
+                    if (data.prescription) this.prescription = data.prescription;
+                }
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+            }
+        },
+        
+        async refreshData() {
+            await this.loadInitialData();
+            showToast('Data refreshed', 'success');
+        }
+    };
+}
+</script>
+{% endblock %}

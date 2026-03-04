@@ -1,0 +1,21 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "492325c5-0e04-4376-8755-474373eff5ca",
+  "summary": {
+    "symptoms": {
+      "description": "running  nose none",
+      "duration": "3",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running  nose none"
+      ],
+      "needs_more_info": false,
+      "error": "cannot access local variable 'params' where it is not associated with a value",
+      "structured_summary": "running  nose none"
+    }
+  },
+  "timestamp": "2026-03-02T21:21:36.499262"
+}
