@@ -3,11 +3,14 @@
 import logging
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from django.utils import timezone
+from django.conf import settings
+
 import random
 from asgiref.sync import async_to_sync, sync_to_async
 
 from apps.blackboard.services import BlackboardService
+from apps.blackboard.models import BlackboardEntry
 from apps.consultations.models import Consultation
 from .symptom_agent import SymptomAgent
 from .diagnosis_agent import DiagnosisAgent
@@ -86,13 +89,21 @@ class AsyncAutonomousController:
     
     async def _run_loop(self):
         logger.info("Controller loop started (offline mode)")
+        loop_count = 0
         while self.running:
             try:
+                loop_count += 1
                 # Process consultations
-                await self._process_pending_consultations()
+                processed = await self._process_pending_consultations()
+                if processed > 0:
+                    logger.info(f"Processed {processed} consultation(s) this cycle")
                 
                 # Simulate lab results for offline testing
                 await self._check_lab_results()
+                
+                # Debug: log state every 15 loops (~30s) when idle
+                if loop_count % 15 == 1:
+                    await self._log_controller_state()
                 
                 await asyncio.sleep(2)
             except asyncio.CancelledError:
@@ -101,9 +112,21 @@ class AsyncAutonomousController:
                 logger.error(f"Controller loop error: {e}")
                 await asyncio.sleep(5)
     
-    async def _process_pending_consultations(self):
-        """Process all consultations that need attention"""
-        # Get all active consultations
+    async def _log_controller_state(self):
+        """Log blackboard state for debugging (runs periodically when idle)"""
+        try:
+            total = await sync_to_async(lambda: BlackboardEntry.objects.count())()
+            counts = {}
+            for state in ['initial', 'symptoms_collected', 'diagnosis_complete', 'lab_tests_ordered', 'lab_tests_complete', 'final_diagnosis_ready', 'prescription_sent']:
+                lst = await sync_to_async(self.blackboard.get_consultations_by_state)(state)
+                counts[state] = len(lst)
+            logger.info(f"Blackboard: {total} entries total. By state: {counts}")
+        except Exception as e:
+            logger.debug(f"Controller state log skipped: {e}")
+
+    async def _process_pending_consultations(self) -> int:
+        """Process all consultations that need attention. Returns count processed."""
+        processed = 0
         for state in self.workflow.keys():
             if state in ['completed', 'failed']:
                 continue
@@ -111,8 +134,9 @@ class AsyncAutonomousController:
             consultations = await sync_to_async(self.blackboard.get_consultations_by_state)(state)
             
             for consultation_id in consultations:
-                # Ensure consultation_id is a string
                 await self._process_consultation(str(consultation_id))
+                processed += 1
+        return processed
     
     async def _process_consultation(self, consultation_id: str):
         """Process a single consultation through its next step"""
@@ -140,12 +164,12 @@ class AsyncAutonomousController:
                 # End of workflow
                 await sync_to_async(self.blackboard.write)(consultation_id, {
                     'current_state': 'completed',
-                    'completed_at': datetime.now().isoformat()
+                    'completed_at': timezone.now().isoformat()
                 }, 'controller')
                 try:
                     await sync_to_async(Consultation.objects.filter(id=consultation_id).update)(
                         current_state='completed',
-                        completed_at=datetime.now()
+                        completed_at=timezone.now()
                     )
                 except Exception:
                     pass
@@ -212,8 +236,20 @@ class AsyncAutonomousController:
                     # Update to next state
                     await sync_to_async(self.blackboard.write)(consultation_id, {
                         'current_state': success_state,
-                        f'{agent_name}_completed_at': datetime.now().isoformat()
+                        f'{agent_name}_completed_at': timezone.now().isoformat()
                     }, 'controller')
+
+                    # Keep the Consultation DB row in sync for UI/dashboard.
+                    try:
+                        await sync_to_async(
+                            Consultation.objects.filter(id=consultation_id).update
+                        )(
+                            current_state=success_state,
+                            updated_at=timezone.now(),
+                        )
+                    except Exception:
+                        # Non-fatal: blackboard remains source-of-truth.
+                        pass
                     
                     logger.info(f" {agent_name} succeeded for {consultation_id} -> {success_state}")
                     
@@ -245,7 +281,7 @@ class AsyncAutonomousController:
                     # Handle failure
                     error_msg = result.get('error', 'Unknown error')
                     errors = consultation_data.get('errors', []) + [{
-                        'timestamp': datetime.now().isoformat(),
+                        'timestamp': timezone.now().isoformat(),
                         'agent': agent_name,
                         'error': error_msg
                     }]
@@ -254,6 +290,16 @@ class AsyncAutonomousController:
                         'current_state': failure_state,
                         'errors': errors
                     }, 'controller')
+
+                    try:
+                        await sync_to_async(
+                            Consultation.objects.filter(id=consultation_id).update
+                        )(
+                            current_state=failure_state,
+                            updated_at=timezone.now(),
+                        )
+                    except Exception:
+                        pass
                     
                     logger.error(f" {agent_name} failed for {consultation_id}: {error_msg}")
 
@@ -282,7 +328,7 @@ class AsyncAutonomousController:
             except Exception as e:
                 logger.error(f"Exception in {agent_name} for {consultation_id}: {e}")
                 errors = consultation_data.get('errors', []) + [{
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': timezone.now().isoformat(),
                     'agent': agent_name,
                     'error': str(e)
                 }]
@@ -291,6 +337,16 @@ class AsyncAutonomousController:
                     'current_state': failure_state,
                     'errors': errors
                 }, 'controller')
+
+                try:
+                    await sync_to_async(
+                        Consultation.objects.filter(id=consultation_id).update
+                    )(
+                        current_state=failure_state,
+                        updated_at=timezone.now(),
+                    )
+                except Exception:
+                    pass
 
                 await self._send_websocket_update(consultation_id, {
                     "type": "agent_completed",
@@ -332,6 +388,8 @@ class AsyncAutonomousController:
     
     async def _check_lab_results(self):
         """Simulate checking for lab results from external systems"""
+        if getattr(settings, "LAB_RESULTS_MODE", "mock") == "upload":
+            return
         consultations = await sync_to_async(self.blackboard.get_consultations_by_state)('lab_tests_ordered')
         
         for consultation_id in consultations:
@@ -350,7 +408,7 @@ class AsyncAutonomousController:
                     if random.random() < 0.3:  # 30% chance test is complete
                         test['status'] = 'completed'
                         test['results'] = self._generate_mock_results(test['test_name'])
-                        test['completed_date'] = datetime.now().isoformat()
+                        test['completed_date'] = timezone.now().isoformat()
                 
                 await sync_to_async(self.blackboard.write)(consultation_id, {
                     'lab_tests': lab_tests

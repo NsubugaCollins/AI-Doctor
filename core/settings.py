@@ -163,14 +163,29 @@ LOGOUT_REDIRECT_URL = '/'
 SITE_ID = 1
 
 # Email settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@mediai.local')
 
+# SMTP (configure in .env if you want real sending)
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
 
-# OpenAI Configuration
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '4000'))
-OPENAI_TEMPERATURE = float(os.getenv('OPENAI_TEMPERATURE', '0.3'))
+# Notification inboxes
+LAB_INBOX_EMAIL = os.getenv('LAB_INBOX_EMAIL', '')
+PHARMACY_INBOX_EMAIL = os.getenv('PHARMACY_INBOX_EMAIL', '')
+
+# LLM Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# Groq Configuration
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_TEMPERATURE = float(os.getenv("GROQ_TEMPERATURE", "0.2"))
+GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "1024"))
 
 # Validate LLM configuration (only warn if none is set)
 if not OPENAI_API_KEY and not os.getenv("DEEPSEEK_API_KEY", "") and not os.getenv("GROQ_API_KEY", ""):
@@ -179,3 +194,50 @@ if not OPENAI_API_KEY and not os.getenv("DEEPSEEK_API_KEY", "") and not os.geten
 # Agent settings
 AGENT_CHECK_INTERVAL = 5  # seconds
 AGENT_MAX_RETRIES = 3
+
+# Lab results ingestion mode:
+# - "mock": LabAgent auto-generates results (demo)
+# - "upload": lab results must be uploaded via Lab Portal PDF
+LAB_RESULTS_MODE = os.getenv('LAB_RESULTS_MODE', 'mock').lower()
+
+# Logging configuration - surface controller/agent progress to console
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '[{levelname}] {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        # Show detailed progress from controller and agents
+        'apps.agents': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps.blackboard': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps.consultations': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Django's default logging stays mostly unchanged
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': True,
+        },
+    },
+}

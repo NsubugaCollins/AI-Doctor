@@ -1,0 +1,28 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "668c07d8-4421-4495-851f-df89e73031ec",
+  "summary": {
+    "symptoms": {
+      "description": "running nose none",
+      "duration": "4",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose"
+      ],
+      "duration_days": 4,
+      "severity_level": 5,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Running nose for 4 days with moderate severity.",
+      "possible_conditions": [
+        "Common Cold",
+        "Allergies"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T10:00:42.958398+00:00"
+}

@@ -307,6 +307,7 @@ function consultationMonitor() {
         init() {
             this.connectWebSocket();
             this.loadInitialData();
+            this.startPolling();
             
             // Keep-alive ping every 30 seconds
             setInterval(() => {
@@ -314,6 +315,15 @@ function consultationMonitor() {
                     this.ws.send(JSON.stringify({ type: 'ping' }));
                 }
             }, 30000);
+        },
+
+        startPolling() {
+            // Poll status + activity so progress works even when controller runs
+            // in a different process (in-memory channel layer won't bridge).
+            setInterval(() => {
+                this.loadInitialData();
+                this.loadActivity();
+            }, 2000);
         },
         
         connectWebSocket() {
@@ -480,10 +490,78 @@ function consultationMonitor() {
                     if (data.lab_tests) this.labTests = data.lab_tests;
                     if (data.lab_results) this.labResults = data.lab_results;
                     if (data.prescription) this.prescription = data.prescription;
+
+                    // Update progress steps based on state
+                    const state = data.current_state || data.blackboard_state;
+                    this.applyStateToSteps(state);
                 }
             } catch (error) {
                 console.error('Error loading initial data:', error);
             }
+        },
+
+        async loadActivity() {
+            try {
+                const response = await fetch(`/api/consultation/{{ consultation.id }}/activity/`);
+                if (!response.ok) return;
+                const data = await response.json();
+                const sessions = data.sessions || [];
+                if (!this._seenSessionIds) this._seenSessionIds = new Set();
+
+                for (const s of sessions) {
+                    if (this._seenSessionIds.has(s.id)) continue;
+                    this._seenSessionIds.add(s.id);
+
+                    const agent = this.formatAgentName(s.agent_type);
+                    if (s.status === 'processing') {
+                        this.addLog({
+                            type: 'started',
+                            agent,
+                            message: `${agent} started`,
+                            icon: 'fas fa-play-circle text-blue-500',
+                            timestamp: new Date(s.created_at || Date.now()).toLocaleTimeString()
+                        });
+                    } else if (s.status === 'completed') {
+                        this.addLog({
+                            type: 'completed',
+                            agent,
+                            message: `${agent} completed`,
+                            icon: 'fas fa-check-circle text-green-500',
+                            timestamp: new Date(s.completed_at || s.created_at || Date.now()).toLocaleTimeString()
+                        });
+                    } else if (s.status === 'failed') {
+                        this.addLog({
+                            type: 'completed',
+                            agent,
+                            message: `${agent} failed: ${s.error_message || 'Unknown error'}`,
+                            icon: 'fas fa-times-circle text-red-500',
+                            timestamp: new Date(s.completed_at || s.created_at || Date.now()).toLocaleTimeString()
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading activity:', e);
+            }
+        },
+
+        applyStateToSteps(state) {
+            const s = String(state || '');
+            // Reset actives
+            this.steps.forEach(step => step.active = false);
+
+            const idx = (label) => this.steps.findIndex(x => x.label === label);
+            const markCompletedThrough = (i) => {
+                this.steps.forEach((step, j) => step.completed = j <= i);
+                this.progress = ((i + 1) / this.steps.length) * 100;
+            };
+
+            if (s === 'initial') { markCompletedThrough(0); return; }
+            if (s === 'symptoms_collected') { markCompletedThrough(idx('Analysis')); return; }
+            if (s === 'diagnosis_complete') { markCompletedThrough(idx('Diagnosis')); return; }
+            if (s === 'lab_tests_ordered') { markCompletedThrough(idx('Lab Tests')); return; }
+            if (s === 'lab_tests_complete') { markCompletedThrough(idx('Results')); return; }
+            if (s === 'final_diagnosis_ready') { markCompletedThrough(idx('Prescription')); return; }
+            if (s === 'prescription_sent' || s === 'completed') { markCompletedThrough(idx('Complete')); return; }
         },
         
         async refreshData() {

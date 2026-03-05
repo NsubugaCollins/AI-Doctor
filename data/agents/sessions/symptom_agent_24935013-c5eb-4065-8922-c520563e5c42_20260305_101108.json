@@ -1,0 +1,29 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "24935013-c5eb-4065-8922-c520563e5c42",
+  "summary": {
+    "symptoms": {
+      "description": "running nose",
+      "duration": "3 days",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose"
+      ],
+      "duration_days": 3,
+      "severity_level": 6,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Patient has been experiencing a running nose for 3 days, with a moderate severity of 6/10.",
+      "possible_conditions": [
+        "Common Cold",
+        "Allergies",
+        "Sinus Infection"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T10:11:08.428516+00:00"
+}

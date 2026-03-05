@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import hashlib
@@ -11,6 +12,8 @@ from django.conf import settings
 # Use our simple text splitter
 from .text_splitter import SimpleTextSplitter
 
+logger = logging.getLogger(__name__)
+
 class PDFRAGService:
     """RAG Service for PDF medical documents"""
     
@@ -22,9 +25,8 @@ class PDFRAGService:
         try:
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
-            print(f"Error loading sentence transformer: {e}")
-            # Fallback to a warning
-            print("⚠️  Warning: Sentence transformer not available. PDF search will not work.")
+            logger.warning("Error loading sentence transformer: %s", e)
+            logger.warning("Sentence transformer not available. PDF search will not work.")
             self.embedding_model = None
         
         self.dimension = 384
@@ -53,15 +55,15 @@ class PDFRAGService:
                 self.index = faiss.read_index(index_path)
                 with open(docs_path, 'r') as f:
                     self.documents = json.load(f)
-                print(f"✅ Loaded existing index with {len(self.documents)} documents")
+                logger.info("Loaded existing index with %s documents", len(self.documents))
             except Exception as e:
-                print(f"⚠️ Error loading index: {e}, creating new one")
+                logger.warning("Error loading index (%s). Creating new one.", e)
                 self.index = faiss.IndexFlatL2(self.dimension)
                 self.documents = []
         else:
             self.index = faiss.IndexFlatL2(self.dimension)
             self.documents = []
-            print("✅ Created new FAISS index")
+            logger.info("Created new FAISS index")
     
     def _save_index(self):
         """Save FAISS index"""
@@ -73,9 +75,9 @@ class PDFRAGService:
                 faiss.write_index(self.index, index_path)
                 with open(docs_path, 'w') as f:
                     json.dump(self.documents, f, indent=2)
-                print(f"✅ Saved index with {len(self.documents)} documents")
+                logger.info("Saved index with %s documents", len(self.documents))
             except Exception as e:
-                print(f"⚠️ Error saving index: {e}")
+                logger.warning("Error saving index: %s", e)
     
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from PDF"""
@@ -88,36 +90,36 @@ class PDFRAGService:
                     text += f"[Page {page_num + 1}]\n{page_text}\n\n"
             return text
         except Exception as e:
-            print(f"⚠️ Error extracting PDF {pdf_path}: {e}")
+            logger.warning("Error extracting PDF %s: %s", pdf_path, e)
             return ""
     
     def load_pdf(self, pdf_path: str, metadata: Optional[Dict] = None) -> bool:
         """Load PDF into vector store"""
         if not self.embedding_model:
-            print("⚠️ Cannot load PDF: embedding model not available")
+            logger.warning("Cannot load PDF: embedding model not available")
             return False
         
         try:
-            print(f"📄 Loading PDF: {os.path.basename(pdf_path)}")
+            logger.info("Loading PDF: %s", os.path.basename(pdf_path))
             
             # Extract text
             text = self.extract_text_from_pdf(pdf_path)
             if not text or len(text.strip()) < 50:
-                print(f"⚠️ PDF contains little text")
+                logger.warning("PDF contains little text")
                 return False
             
-            print(f"   Extracted {len(text)} characters")
+            logger.info("Extracted %s characters", len(text))
             
             # Split into chunks
             chunks = self.text_splitter.split_text(text)
-            print(f"   Created {len(chunks)} chunks")
+            logger.info("Created %s chunks", len(chunks))
             
             if not chunks:
                 return False
             
             # Create embeddings
             embeddings = self.embedding_model.encode(chunks)
-            print(f"   Created embeddings with shape {embeddings.shape}")
+            logger.info("Created embeddings with shape %s", getattr(embeddings, "shape", None))
             
             # Add to index
             if self.index.ntotal == 0:
@@ -137,19 +139,17 @@ class PDFRAGService:
                 })
             
             self._save_index()
-            print(f"✅ Successfully loaded {len(chunks)} chunks from {base_name}")
+            logger.info("Successfully loaded %s chunks from %s", len(chunks), base_name)
             return True
             
         except Exception as e:
-            print(f"❌ Error loading PDF: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error loading PDF: %s", e)
             return False
     
     def search_similar_sync(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """Search for similar content"""
         if not self.embedding_model or not self.index or self.index.ntotal == 0:
-            print("⚠️ No documents in index")
+            logger.info("No documents in index")
             return []
         
         try:
@@ -182,7 +182,7 @@ class PDFRAGService:
             return results
             
         except Exception as e:
-            print(f"⚠️ Error searching: {e}")
+            logger.warning("Error searching: %s", e)
             return []
     
     def get_pdf_sources(self) -> List[str]:

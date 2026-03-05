@@ -1,0 +1,32 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "f331852a-03fb-4620-ba44-265b6abbdb14",
+  "summary": {
+    "symptoms": {
+      "description": "running nose headeche none",
+      "duration": "3days",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose",
+        "headache"
+      ],
+      "duration_days": 3,
+      "severity_level": 5,
+      "urgent_indicators": [
+        "headache"
+      ],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "3-day history of running nose and headache, moderate severity.",
+      "possible_conditions": [
+        "Common Cold",
+        "Sinus Infection",
+        "Migraine"
+      ]
+    }
+  },
+  "timestamp": "2026-03-04T18:54:25.748543+00:00"
+}

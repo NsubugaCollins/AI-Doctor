@@ -1,0 +1,31 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "51202866-7cb4-487f-9eb3-55aa6d0aee3d",
+  "summary": {
+    "symptoms": {
+      "description": "running stomach none",
+      "duration": "3 days",
+      "severity": 7,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running stomach"
+      ],
+      "duration_days": 3,
+      "severity_level": 7,
+      "urgent_indicators": [
+        "running stomach"
+      ],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Patient has been experiencing a running stomach for 3 days, with a severity level of 7/10.",
+      "possible_conditions": [
+        "Gastroenteritis",
+        "Irritable Bowel Syndrome (IBS)",
+        "Gastroesophageal Reflux Disease (GERD)"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T08:13:10.640038+00:00"
+}

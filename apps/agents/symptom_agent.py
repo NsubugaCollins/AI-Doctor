@@ -5,12 +5,14 @@ Integrated with autonomous system
 
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime
+from django.utils import timezone
+
 from asgiref.sync import sync_to_async
 
 from apps.agents.open_ai_service import get_openai_service
 from apps.blackboard.services import BlackboardService
 from apps.agents.agent_session import SessionManager
+from apps.consultations.models import Symptom
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +57,31 @@ class SymptomAgent:
             # Get symptoms from blackboard
             symptoms = consultation_data.get('symptoms')
             if not symptoms:
-                logger.info(f"No symptoms yet for {consultation_id}, waiting...")
-                await sync_to_async(self.session_manager.complete_session)({
-                    'status': 'waiting',
-                    'message': 'No symptoms available'
-                })
-                return {'status': 'waiting', 'message': 'Waiting for symptoms'}
+                # Recovery path: symptoms may exist in DB but not yet written to blackboard
+                latest_symptom = await sync_to_async(
+                    lambda: Symptom.objects.filter(consultation_id=consultation_id).order_by('-created_at').first()
+                )()
+
+                if latest_symptom:
+                    symptoms = {
+                        "description": latest_symptom.description,
+                        "duration": latest_symptom.duration,
+                        "severity": latest_symptom.severity,
+                        "input_type": latest_symptom.input_type,
+                    }
+                    await sync_to_async(self.blackboard.write)(
+                        consultation_id,
+                        {"symptoms": symptoms, "current_state": "initial"},
+                        "symptom_agent",
+                    )
+                    logger.info(f"Recovered symptoms from DB for {consultation_id}")
+                else:
+                    logger.info(f"No symptoms yet for {consultation_id}, waiting...")
+                    await sync_to_async(self.session_manager.complete_session)({
+                        'status': 'waiting',
+                        'message': 'No symptoms available'
+                    })
+                    return {'status': 'waiting', 'message': 'Waiting for symptoms'}
             
             # Analyze symptoms with GPT-4
             analysis = await self._analyze_symptoms(symptoms)
@@ -278,7 +299,7 @@ Return JSON with:
         enhanced_symptoms = current_symptoms.copy()
         enhanced_symptoms['description'] = enhanced_description
         enhanced_symptoms['clarification_answers'] = answers
-        enhanced_symptoms['clarified_at'] = datetime.now().isoformat()
+        enhanced_symptoms['clarified_at'] = timezone.now().isoformat()
         
         # Re-analyze with new information
         new_analysis = await self._analyze_symptoms(enhanced_symptoms)

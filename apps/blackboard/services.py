@@ -46,8 +46,11 @@ class BlackboardService:
             }]
         }
 
-        # Redis
-        self.cache.set(f"consultation:{consultation_id}", json.dumps(initial_state), timeout=3600)
+        # Cache (Redis). If unavailable, fall back to DB only.
+        try:
+            self.cache.set(f"consultation:{consultation_id}", json.dumps(initial_state), timeout=3600)
+        except Exception as e:
+            logger.warning("Cache set failed in create_consultation (%s): %s", consultation_id, e)
 
         # PostgreSQL
         BlackboardEntry.objects.create(
@@ -62,9 +65,12 @@ class BlackboardService:
         # Ensure consultation_id is a string
         consultation_id = str(consultation_id)
         
-        cached = self.cache.get(f"consultation:{consultation_id}")
-        if cached:
-            return json.loads(cached)
+        try:
+            cached = self.cache.get(f"consultation:{consultation_id}")
+            if cached:
+                return json.loads(cached)
+        except Exception as e:
+            logger.warning("Cache read failed (%s): %s", consultation_id, e)
 
         try:
             entry = BlackboardEntry.objects.filter(
@@ -80,8 +86,25 @@ class BlackboardService:
         
         current_state = self.read(consultation_id)
         if not current_state:
-            logger.warning(f"Attempted to write to non-existing consultation: {consultation_id}")
-            return False
+            # Auto-initialize if missing so UI/agents can always write.
+            logger.warning("Auto-initializing missing blackboard state for %s", consultation_id)
+            current_state = {
+                "consultation_id": consultation_id,
+                "patient": {},
+                "current_state": "initial",
+                "symptoms": {},
+                "symptom_analysis": {},
+                "diagnosis": {},
+                "lab_tests": [],
+                "lab_tests_document": {},
+                "lab_results": [],
+                "prescription": {},
+                "history": [{
+                    "timestamp": timezone.now().isoformat(),
+                    "action": "blackboard_auto_initialized",
+                    "agent": agent_name,
+                }],
+            }
 
         current_state.update(updates)
 
@@ -97,8 +120,11 @@ class BlackboardService:
 
         current_state["updated_at"] = timezone.now().isoformat()
 
-        # Redis
-        self.cache.set(f"consultation:{consultation_id}", json.dumps(current_state), timeout=3600)
+        # Cache (Redis). If unavailable, keep DB as source-of-truth.
+        try:
+            self.cache.set(f"consultation:{consultation_id}", json.dumps(current_state), timeout=3600)
+        except Exception as e:
+            logger.warning("Cache set failed (%s): %s", consultation_id, e)
 
         # PostgreSQL
         BlackboardEntry.objects.create(
@@ -118,7 +144,11 @@ class BlackboardService:
 
     def acquire_lock(self, consultation_id: str, agent_name: str) -> bool:
         lock_key = f"lock:{consultation_id}"
-        acquired = self.cache.add(lock_key, agent_name, timeout=self.lock_timeout)
+        try:
+            acquired = self.cache.add(lock_key, agent_name, timeout=self.lock_timeout)
+        except Exception as e:
+            logger.warning("Cache lock add failed (%s): %s", consultation_id, e)
+            return False
         if acquired:
             BlackboardEntry.objects.filter(
                 consultation_id=consultation_id
@@ -131,10 +161,18 @@ class BlackboardService:
 
     def release_lock(self, consultation_id: str, agent_name: str):
         lock_key = f"lock:{consultation_id}"
-        current_owner = self.cache.get(lock_key)
+        try:
+            current_owner = self.cache.get(lock_key)
+        except Exception as e:
+            logger.warning("Cache lock get failed (%s): %s", consultation_id, e)
+            return
 
         if current_owner == agent_name:
-            self.cache.delete(lock_key)
+            try:
+                self.cache.delete(lock_key)
+            except Exception as e:
+                logger.warning("Cache lock delete failed (%s): %s", consultation_id, e)
+                # Still attempt to clear DB lock flags
             BlackboardEntry.objects.filter(
                 consultation_id=consultation_id,
                 lock_owner=agent_name
@@ -145,28 +183,32 @@ class BlackboardService:
             )
 
     def get_consultations_by_state(self, state: str) -> list:
+        """Return consultation_ids whose LATEST blackboard entry has current_state == state."""
         from django.db.models import Max
+        result = []
         try:
             latest_entries = BlackboardEntry.objects.values("consultation_id").annotate(
                 max_created=Max("created_at")
             )
-
-            result = []
             for item in latest_entries:
                 cid = item["consultation_id"]
                 latest = BlackboardEntry.objects.filter(
                     consultation_id=cid,
                     created_at=item["max_created"]
                 ).first()
-                if latest and latest.state.get("current_state") == state:
-                    result.append(cid)
-
+                if latest and latest.state and latest.state.get("current_state") == state:
+                    result.append(str(cid))
             return result
         except Exception as e:
-            logger.warning(f"get_consultations_by_state fallback: {e}")
-            return list(
-                BlackboardEntry.objects.filter(
-                    state__current_state=state
-                ).values_list("consultation_id", flat=True).distinct()
-            )
+            logger.warning(f"get_consultations_by_state error: {e}")
+            try:
+                return [
+                    str(x) for x in
+                    BlackboardEntry.objects.filter(
+                        state__current_state=state
+                    ).values_list("consultation_id", flat=True).distinct()
+                ]
+            except Exception as e2:
+                logger.warning(f"get_consultations_by_state fallback error: {e2}")
+                return []
 

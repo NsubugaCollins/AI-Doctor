@@ -130,6 +130,29 @@ class LabTest(models.Model):
     def __str__(self):
         return f"{self.test_name} - {self.status}"
 
+
+class LabResultUpload(models.Model):
+    """Lab-uploaded PDF results attached to a consultation."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    consultation = models.ForeignKey(
+        Consultation, on_delete=models.CASCADE, related_name="lab_result_uploads"
+    )
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="lab_uploads"
+    )
+    pdf_file = models.FileField(upload_to="lab_results/")
+    extracted_text = models.TextField(blank=True, default="")
+    parsed_results = models.JSONField(blank=True, default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "lab_result_uploads"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["consultation", "-created_at"]),
+        ]
+
 class Prescription(models.Model):
     """Prescription records"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

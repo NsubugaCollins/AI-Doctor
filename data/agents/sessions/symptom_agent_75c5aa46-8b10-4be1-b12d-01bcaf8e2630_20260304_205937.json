@@ -1,0 +1,28 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "75c5aa46-8b10-4be1-b12d-01bcaf8e2630",
+  "summary": {
+    "symptoms": {
+      "description": "running nose none",
+      "duration": "3 days",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "runny nose"
+      ],
+      "duration_days": 3,
+      "severity_level": 6,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Runny nose for 3 days at a moderate level of severity (6/10).",
+      "possible_conditions": [
+        "Common Cold",
+        "Allergies"
+      ]
+    }
+  },
+  "timestamp": "2026-03-04T20:59:37.988150"
+}

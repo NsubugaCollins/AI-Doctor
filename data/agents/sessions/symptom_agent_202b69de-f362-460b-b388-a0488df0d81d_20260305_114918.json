@@ -1,0 +1,31 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "202b69de-f362-460b-b388-a0488df0d81d",
+  "summary": {
+    "symptoms": {
+      "description": "diahhhorea",
+      "duration": "3",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "diarrhea"
+      ],
+      "duration_days": 3,
+      "severity_level": 6,
+      "urgent_indicators": [
+        "severe diarrhea"
+      ],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "The patient is experiencing diarrhea for 3 days with a severity level of 6/10.",
+      "possible_conditions": [
+        "Gastroenteritis",
+        "Food poisoning",
+        "Inflammatory bowel disease"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T11:49:18.124240+00:00"
+}

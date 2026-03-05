@@ -1,0 +1,32 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "8fa703f3-2615-4fd2-be36-051ef4fe41c1",
+  "summary": {
+    "symptoms": {
+      "description": "running nose fever",
+      "duration": "4",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "running nose",
+        "fever"
+      ],
+      "duration_days": 4,
+      "severity_level": 6,
+      "urgent_indicators": [
+        "fever"
+      ],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "The patient has a running nose and fever, which have been present for 4 days and are moderately severe.",
+      "possible_conditions": [
+        "Common Cold",
+        "Viral Infection",
+        "Sinusitis"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T09:49:19.584520+00:00"
+}

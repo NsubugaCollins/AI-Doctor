@@ -1,0 +1,29 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "b7db5a18-c3f3-4cd1-9924-7d156bbbbdfe",
+  "summary": {
+    "symptoms": {
+      "description": "headache",
+      "duration": "3days",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "headache"
+      ],
+      "duration_days": 3,
+      "severity_level": 5,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Headache lasting 3 days with moderate severity.",
+      "possible_conditions": [
+        "Tension headache",
+        "Migraine",
+        "Sinus headache"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T11:12:10.353062+00:00"
+}

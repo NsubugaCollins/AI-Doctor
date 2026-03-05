@@ -1,0 +1,29 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "31df2987-23b1-44b0-a1d8-df626474675c",
+  "summary": {
+    "symptoms": {
+      "description": "headache none",
+      "duration": "6",
+      "severity": 6,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "headache"
+      ],
+      "duration_days": 6,
+      "severity_level": 6,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Patient is experiencing a headache of moderate severity for 6 days.",
+      "possible_conditions": [
+        "tension headache",
+        "migraine",
+        "sinus headache"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T10:00:45.294490+00:00"
+}

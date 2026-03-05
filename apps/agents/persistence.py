@@ -6,7 +6,8 @@ Stores agent configurations and session summaries to data/agents/
 import json
 import logging
 import os
-from datetime import datetime
+from django.utils import timezone
+
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -39,7 +40,7 @@ def save_agent_config(agent_name: str, config: Dict[str, Any]) -> str:
     data = {
         "agent_name": agent_name,
         "config": config,
-        "saved_at": datetime.now().isoformat(),
+        "saved_at": timezone.now().isoformat(),
         "version": "1.0",
     }
     with open(filepath, "w") as f:
@@ -73,12 +74,12 @@ def save_agent_session_summary(
     sessions_dir = agents_dir / "sessions"
     _ensure_dir(str(sessions_dir))
 
-    filepath = sessions_dir / f"{agent_name}_{consultation_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    filepath = sessions_dir / f"{agent_name}_{consultation_id}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.json"
     data = {
         "agent_name": agent_name,
         "consultation_id": consultation_id,
         "summary": summary,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": timezone.now().isoformat(),
     }
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
@@ -100,15 +101,15 @@ def persist_agents_on_shutdown(controller):
     agents_data = {
         "symptom_agent": {
             "type": "SymptomAgent",
-            "saved_at": datetime.now().isoformat(),
+            "saved_at": timezone.now().isoformat(),
         },
         "diagnosis_agent": {
             "type": "DiagnosisAgent",
-            "saved_at": datetime.now().isoformat(),
+            "saved_at": timezone.now().isoformat(),
         },
         "lab_agent": {
             "type": "LabAgent",
-            "saved_at": datetime.now().isoformat(),
+            "saved_at": timezone.now().isoformat(),
         },
     }
     filepath = agents_dir / "agents_registry.json"

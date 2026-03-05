@@ -7,9 +7,16 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
+from django.conf import settings
+from django.core.files.storage import default_storage
 
-from .models import Consultation, Symptom, Patient
+from .models import Consultation, Symptom, Patient, LabResultUpload
 from apps.blackboard.services import BlackboardService
+from apps.agents.models import AgentSession
+from apps.consultations.notifications import send_lab_results_email
+
+from PyPDF2 import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +103,7 @@ def add_symptoms_ui(request, consultation_id):
         # autonomous controller + symptom_agent can pick them up.
         try:
             blackboard = BlackboardService()
-            blackboard.write(
+            ok = blackboard.write(
                 str(consultation.id),
                 {
                     "symptoms": {
@@ -110,6 +117,30 @@ def add_symptoms_ui(request, consultation_id):
                 },
                 "ui",
             )
+            if not ok:
+                # Ensure blackboard state exists, then retry once.
+                try:
+                    patient = consultation.patient
+                    patient_data = {
+                        "patient_id": str(patient.id) if patient else None,
+                        "name": getattr(getattr(patient, "user", None), "username", None),
+                    }
+                except Exception:
+                    patient_data = {}
+                blackboard.create_consultation(patient_data, str(consultation.id))
+                blackboard.write(
+                    str(consultation.id),
+                    {
+                        "symptoms": {
+                            "description": description,
+                            "duration": duration,
+                            "severity": severity,
+                            "input_type": "text",
+                        },
+                        "current_state": "initial",
+                    },
+                    "ui",
+                )
         except Exception as e:
             logger.error(f"Blackboard symptom write failed: {e}")
 
@@ -255,20 +286,190 @@ async def consultation_status_api(request, consultation_id):
 
         has_symptoms = await symptom_exists(consultation)
 
+        # Blackboard is the source-of-truth for agent outputs and state transitions.
+        bb = blackboard_data or {}
+        bb_state = bb.get("current_state")
+
         return JsonResponse(
             {
                 "id": str(consultation.id),
-                "current_state": consultation.current_state,
+                # Prefer blackboard state so the UI reflects real-time progress,
+                # even if DB fields lag behind.
+                "current_state": bb_state or consultation.current_state,
+                "db_state": consultation.current_state,
                 "has_symptoms": has_symptoms,
-                "diagnosis": consultation.diagnosis,
-                "lab_tests": consultation.lab_tests,
-                "prescription": consultation.prescription,
-                "blackboard_state": blackboard_data.get("current_state")
-                if blackboard_data
-                else None,
+                # Prefer blackboard payloads (agents primarily write there).
+                "diagnosis": bb.get("diagnosis") or consultation.diagnosis,
+                "lab_tests": bb.get("lab_tests") or consultation.lab_tests,
+                "lab_results": bb.get("lab_results") or [],
+                "prescription": bb.get("prescription") or consultation.prescription,
+                "blackboard_state": bb_state,
+                "blackboard_updated_at": bb.get("updated_at"),
             }
         )
 
     except Exception as e:
         logger.error(f"Status error: {e}")
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+@require_GET
+async def consultation_activity_api(request, consultation_id):
+    """
+    Polling-friendly activity API.
+    Returns the latest agent sessions for this consultation so the frontend can
+    show progress even when WebSockets don't bridge processes.
+    """
+    try:
+        consultation = await get_consultation_for_user(consultation_id, request.user)
+
+        sessions = await sync_to_async(list)(
+            AgentSession.objects.filter(consultation_id=consultation.id)
+            .order_by("-created_at")[:50]
+        )
+
+        # Return oldest -> newest for easy appending
+        sessions.reverse()
+
+        payload = []
+        for s in sessions:
+            payload.append(
+                {
+                    "id": str(s.id),
+                    "agent_type": s.agent_type,
+                    "status": s.status,
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                    "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+                    "processing_time": s.processing_time,
+                    "error_message": s.error_message,
+                }
+            )
+
+        return JsonResponse(
+            {
+                "consultation_id": str(consultation.id),
+                "sessions": payload,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Activity error: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def _is_lab_user(user) -> bool:
+    try:
+        return bool(getattr(user, "is_authenticated", False)) and (
+            getattr(user, "is_staff", False) or getattr(user, "user_type", "") == "lab"
+        )
+    except Exception:
+        return False
+
+
+@login_required
+def lab_dashboard(request):
+    if not _is_lab_user(request.user):
+        return redirect("dashboard")
+
+    blackboard = BlackboardService()
+    pending_ids = blackboard.get_consultations_by_state("lab_tests_ordered")
+    consultations = Consultation.objects.filter(id__in=pending_ids).select_related("patient", "patient__user")
+
+    rows = []
+    for c in consultations.order_by("-created_at")[:100]:
+        bb = blackboard.read(str(c.id)) or {}
+        rows.append(
+            {
+                "consultation": c,
+                "blackboard": bb,
+                "lab_tests_document": bb.get("lab_tests_document"),
+                "lab_tests": bb.get("lab_tests") or [],
+            }
+        )
+
+    return render(request, "lab_dashboard.html", {"rows": rows})
+
+
+@login_required
+def lab_upload_results(request, consultation_id):
+    if not _is_lab_user(request.user):
+        return redirect("dashboard")
+
+    try:
+        consultation = Consultation.objects.select_related("patient", "patient__user").get(id=consultation_id)
+    except Consultation.DoesNotExist:
+        return redirect("lab_dashboard")
+
+    if request.method != "POST":
+        blackboard = BlackboardService()
+        bb = blackboard.read(str(consultation.id)) or {}
+        uploads = LabResultUpload.objects.filter(consultation=consultation).order_by("-created_at")[:10]
+        return render(
+            request,
+            "lab_upload.html",
+            {
+                "consultation": consultation,
+                "blackboard": bb,
+                "uploads": uploads,
+            },
+        )
+
+    pdf = request.FILES.get("pdf_file")
+    if not pdf:
+        return redirect("lab_upload_results", consultation_id=consultation.id)
+
+    # Save upload model + file
+    upload = LabResultUpload.objects.create(
+        consultation=consultation,
+        uploaded_by=request.user,
+        pdf_file=pdf,
+    )
+
+    # Extract text
+    extracted_text = ""
+    try:
+        reader = PdfReader(upload.pdf_file.path)
+        parts = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                parts.append(t)
+        extracted_text = "\n\n".join(parts)
+    except Exception as e:
+        logger.warning("Failed to extract PDF text for %s: %s", upload.id, e)
+        extracted_text = ""
+
+    upload.extracted_text = extracted_text
+    upload.save(update_fields=["extracted_text"])
+
+    # Update blackboard so controller can continue
+    blackboard = BlackboardService()
+    bb_updates = {
+        "lab_results_pdf": upload.pdf_file.url,
+        "lab_results_text": extracted_text[:20000],  # keep bounded
+        "lab_results": [
+            {
+                "test_name": "Uploaded PDF",
+                "results": {"text_excerpt": extracted_text[:2000]},
+                "completed_date": timezone.now().isoformat(),
+            }
+        ],
+        "current_state": "lab_tests_complete",
+    }
+    blackboard.write(str(consultation.id), bb_updates, "lab_portal")
+
+    # Email patient (optional)
+    try:
+        patient_email = consultation.patient.user.email if consultation.patient and consultation.patient.user else None
+        pdf_bytes = upload.pdf_file.read()
+        upload.pdf_file.seek(0)
+        send_lab_results_email(
+            consultation=consultation,
+            patient_email=patient_email,
+            pdf_name=pdf.name or f"lab_results_{consultation.id}.pdf",
+            pdf_bytes=pdf_bytes,
+        )
+    except Exception:
+        pass
+
+    return redirect("lab_upload_results", consultation_id=consultation.id)

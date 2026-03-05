@@ -1,0 +1,28 @@
+{
+  "agent_name": "symptom_agent",
+  "consultation_id": "93292579-604f-483c-98be-99ef72cbd6b8",
+  "summary": {
+    "symptoms": {
+      "description": "fever none",
+      "duration": "3 days",
+      "severity": 5,
+      "input_type": "text"
+    },
+    "analysis": {
+      "primary_symptoms": [
+        "fever"
+      ],
+      "duration_days": 3,
+      "severity_level": 5,
+      "urgent_indicators": [],
+      "needs_more_info": false,
+      "clarifying_questions": [],
+      "structured_summary": "Patient has experienced fever for 3 days at a moderate severity of 5/10.",
+      "possible_conditions": [
+        "Viral Infection",
+        "Bacterial Infection"
+      ]
+    }
+  },
+  "timestamp": "2026-03-05T08:44:07.931684+00:00"
+}

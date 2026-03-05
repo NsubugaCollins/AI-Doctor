@@ -7,6 +7,7 @@ from django.views.generic import TemplateView
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('apps.consultations.urls')),
+    path('lab/', include('apps.consultations.lab_urls')),
     path('accounts/', include('allauth.urls')),
     path('', TemplateView.as_view(template_name='index.html'), name='home'),
     path('consultation/<str:consultation_id>/', 

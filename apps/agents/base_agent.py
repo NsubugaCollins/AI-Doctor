@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from django.utils import timezone
+
 from typing import Dict, Any, Optional, List
 from openai import OpenAI, APIError, RateLimitError
 from django.conf import settings
-from django.utils import timezone
+
 import json
 import logging
 import time
@@ -278,7 +279,7 @@ class BaseAgent(ABC):
         
         # Add to history
         history_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": timezone.now().isoformat(),
             "agent": self.name,
             "action": updates.get("action", "update"),
             "state": context.current_state
