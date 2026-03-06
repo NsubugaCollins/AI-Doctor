@@ -1,1 +1,1 @@
-web: ./start.sh
+web: gunicorn Agentic-Doctor-Assistant.wsgi
