@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='symptom',
-            name='transcript',
+            #name='transcript',
             field=models.TextField(blank=True),
         ),
     ]
