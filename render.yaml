@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: doctor-assistant
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn core.asgi:application -k uvicorn.workers.UvicornWorker"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
